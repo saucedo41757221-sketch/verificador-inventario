@@ -68,6 +68,11 @@
             font-size: 14px;
         }
 
+        #saveStatus {
+            font-size: 13px;
+            color: #777;
+        }
+
         .status {
             background: white;
             border-radius: 10px;
@@ -300,6 +305,10 @@
         <div class="file-name" id="fileName">
             Ningún archivo cargado
         </div>
+
+        <div class="file-name" id="saveStatus">
+            Sin cambios guardados
+        </div>
     </div>
 
     <div id="status" class="status"></div>
@@ -341,12 +350,16 @@
 <script>
 
 let products = [];
+let currentInventoryKey = null;
+
+const STORAGE_PREFIX = "verificadorInventario_";
 
 const productList = document.getElementById("productList");
 const search = document.getElementById("search");
 const excelFile = document.getElementById("excelFile");
 const fileName = document.getElementById("fileName");
 const status = document.getElementById("status");
+const saveStatus = document.getElementById("saveStatus");
 
 function isEmpty(value) {
     return value === null ||
@@ -473,14 +486,39 @@ function handleExcel(event) {
                 );
             }
 
-            search.value = "";
+            currentInventoryKey =
+                createInventoryKey(file, products);
 
-            showStatus(
-                "Excel cargado correctamente. " +
-                products.length +
-                " productos sin serie encontrados.",
-                "success"
-            );
+            const hasSavedInventory =
+                !!localStorage.getItem(currentInventoryKey);
+
+            if (hasSavedInventory &&
+                confirmSavedInventory(currentInventoryKey)) {
+
+                loadSavedInventory(currentInventoryKey);
+
+                showStatus(
+                    "Inventario guardado recuperado correctamente.",
+                    "success"
+                );
+
+            } else {
+
+                /*
+                 * Si el usuario no desea continuar con el conteo anterior,
+                 * comenzamos este inventario desde cero.
+                 */
+                deleteSavedInventory();
+
+                showStatus(
+                    "Excel cargado correctamente. " +
+                    products.length +
+                    " productos sin serie encontrados.",
+                    "success"
+                );
+            }
+
+            search.value = "";
 
             renderProducts();
 
@@ -672,6 +710,7 @@ function changePhysical(sku, amount) {
         product.physical = 0;
     }
 
+    saveInventory();
     renderProducts();
 }
 
@@ -691,6 +730,7 @@ function setPhysical(sku, value) {
 
     product.physical = quantity;
 
+    saveInventory();
     renderProducts();
 }
 
