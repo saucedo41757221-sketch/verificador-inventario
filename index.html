@@ -399,6 +399,144 @@ function showStatus(message, type) {
 
 excelFile.addEventListener("change", handleExcel);
 
+
+function createInventoryKey(file, products) {
+
+    const signature = products
+        .map(product =>
+            `${product.sku}|${product.description}|${product.system}`
+        )
+        .join("||");
+
+    return STORAGE_PREFIX + simpleHash(
+        file.name + "|" + file.size + "|" + signature
+    );
+}
+
+function simpleHash(text) {
+
+    let hash = 0;
+
+    for (let i = 0; i < text.length; i++) {
+        hash = ((hash << 5) - hash) + text.charCodeAt(i);
+        hash |= 0;
+    }
+
+    return Math.abs(hash).toString(36);
+}
+
+function saveInventory() {
+
+    if (!currentInventoryKey || !products.length) {
+        return;
+    }
+
+    const data = {
+        fileName: fileName.textContent,
+        savedAt: new Date().toISOString(),
+        products: products
+    };
+
+    localStorage.setItem(
+        currentInventoryKey,
+        JSON.stringify(data)
+    );
+
+    updateSaveStatus();
+}
+
+function loadSavedInventory(key) {
+
+    const saved = localStorage.getItem(key);
+
+    if (!saved) {
+        return false;
+    }
+
+    try {
+
+        const data = JSON.parse(saved);
+
+        if (!data.products || !Array.isArray(data.products)) {
+            return false;
+        }
+
+        products = data.products;
+
+        if (data.fileName) {
+            fileName.textContent = data.fileName;
+        }
+
+        updateSaveStatus(data.savedAt);
+
+        return true;
+
+    } catch (error) {
+
+        return false;
+    }
+}
+
+function updateSaveStatus(savedAt) {
+
+    if (!saveStatus) return;
+
+    const date = savedAt
+        ? new Date(savedAt)
+        : new Date();
+
+    saveStatus.textContent =
+        "Guardado: " +
+        date.toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit"
+        });
+}
+
+function confirmSavedInventory(key) {
+
+    const saved = localStorage.getItem(key);
+
+    if (!saved) {
+        return false;
+    }
+
+    try {
+
+        const data = JSON.parse(saved);
+
+        const counted = data.products.filter(product =>
+            Number(product.physical) > 0
+        ).length;
+
+        const total = data.products.length;
+
+        return confirm(
+            "Hay un inventario guardado de " +
+            total +
+            " productos.\n\n" +
+            counted +
+            " productos ya tienen conteo físico.\n\n" +
+            "¿Deseas continuar con este inventario?"
+        );
+
+    } catch (error) {
+
+        return false;
+    }
+}
+
+function deleteSavedInventory() {
+
+    if (!currentInventoryKey) return;
+
+    localStorage.removeItem(currentInventoryKey);
+
+    saveStatus.textContent =
+        "Sin cambios guardados";
+}
+
+
 function handleExcel(event) {
 
     const file = event.target.files[0];
