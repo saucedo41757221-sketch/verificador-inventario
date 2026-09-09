@@ -350,47 +350,42 @@
     >
 
     <div class="summary">
-        <button
-            type="button"
-            class="summary-box active"
-            id="filterAll"
-            onclick="setFilter('all')"
-        >
-            <span>Productos</span>
+        <button type="button" class="summary-box active" id="filterAll" onclick="setFilter('all')">
+            <span>Todos</span>
             <strong id="totalProducts">0</strong>
         </button>
 
-        <button
-            type="button"
-            class="summary-box"
-            id="filterCompleted"
-            onclick="setFilter('completed')"
-        >
-            <span>Cuadrados</span>
-            <strong id="completedProducts">0</strong>
-        </button>
-
-        <button
-            type="button"
-            class="summary-box"
-            id="filterPending"
-            onclick="setFilter('pending')"
-        >
+        <button type="button" class="summary-box" id="filterPending" onclick="setFilter('pending')">
             <span>Pendientes</span>
             <strong id="pendingProducts">0</strong>
+        </button>
+
+        <button type="button" class="summary-box" id="filterMissing" onclick="setFilter('missing')">
+            <span>Faltantes</span>
+            <strong id="missingProducts">0</strong>
+        </button>
+
+        <button type="button" class="summary-box" id="filterCompleted" onclick="setFilter('completed')">
+            <span>Cuadrados</span>
+            <strong id="completedProducts">0</strong>
         </button>
     </div>
 
     <div class="summary-extra">
-        <button type="button" class="summary-box" id="filterMissing" onclick="setFilter('missing')">
-            <span>Faltantes</span><strong id="missingProducts">0</strong>
-        </button>
-        <button type="button" class="summary-box" id="filterSurplus" onclick="setFilter('surplus')">
-            <span>Sobrantes</span><strong id="surplusProducts">0</strong>
-        </button>
-        <div class="summary-box"><span>Unidades sistema</span><strong id="systemUnits">0</strong></div>
-        <div class="summary-box"><span>Unidades físicas</span><strong id="physicalUnits">0</strong></div>
-        <div class="summary-box"><span>Diferencia total</span><strong id="totalDifference">0</strong></div>
+        <div class="summary-box">
+            <span>Unidades sistema</span>
+            <strong id="systemUnits">0</strong>
+        </div>
+
+        <div class="summary-box">
+            <span>Unidades físicas</span>
+            <strong id="physicalUnits">0</strong>
+        </div>
+
+        <div class="summary-box">
+            <span>Diferencia total</span>
+            <strong id="totalDifference">0</strong>
+        </div>
     </div>
 
     <div id="productList">
@@ -764,10 +759,9 @@ function renderProducts() {
 
         const matchesFilter =
             currentFilter === "all" ||
-            (currentFilter === "completed" && difference === 0) ||
-            (currentFilter === "pending" && difference !== 0) ||
-            (currentFilter === "missing" && difference > 0) ||
-            (currentFilter === "surplus" && difference < 0);
+            (currentFilter === "pending" && product.physical === 0 && product.system > 0) ||
+            (currentFilter === "missing" && product.physical > 0 && product.physical < product.system) ||
+            (currentFilter === "completed" && difference === 0);
 
         return matchesSearch && matchesFilter;
     });
@@ -1003,8 +997,7 @@ function updateFilterButtons() {
         all: document.getElementById("filterAll"),
         completed: document.getElementById("filterCompleted"),
         pending: document.getElementById("filterPending"),
-        missing: document.getElementById("filterMissing"),
-        surplus: document.getElementById("filterSurplus")
+        missing: document.getElementById("filterMissing")
     };
 
     Object.values(buttons).forEach(button => {
@@ -1028,18 +1021,47 @@ function updateSummary() {
             product.system === product.physical
         ).length;
 
+    const pending =
+        products.filter(product =>
+            product.physical === 0 && product.system > 0
+        ).length;
+
+    const missing =
+        products.filter(product =>
+            product.physical > 0 &&
+            product.physical < product.system
+        ).length;
+
     document.getElementById("completedProducts").textContent =
         completed;
 
-    const pending = products.length - completed;
-    document.getElementById("pendingProducts").textContent = pending;
-    document.getElementById("missingProducts").textContent = products.filter(p => p.system - p.physical > 0).length;
-    document.getElementById("surplusProducts").textContent = products.filter(p => p.system - p.physical < 0).length;
-    const systemUnits = products.reduce((t,p) => t + Number(p.system || 0), 0);
-    const physicalUnits = products.reduce((t,p) => t + Number(p.physical || 0), 0);
-    document.getElementById("systemUnits").textContent = systemUnits;
-    document.getElementById("physicalUnits").textContent = physicalUnits;
-    document.getElementById("totalDifference").textContent = systemUnits - physicalUnits;
+    document.getElementById("pendingProducts").textContent =
+        pending;
+
+    document.getElementById("missingProducts").textContent =
+        missing;
+
+    const systemUnits =
+        products.reduce(
+            (total, product) => total + Number(product.system || 0),
+            0
+        );
+
+    const physicalUnits =
+        products.reduce(
+            (total, product) => total + Number(product.physical || 0),
+            0
+        );
+
+    document.getElementById("systemUnits").textContent =
+        systemUnits;
+
+    document.getElementById("physicalUnits").textContent =
+        physicalUnits;
+
+    document.getElementById("totalDifference").textContent =
+        systemUnits - physicalUnits;
+
     updateFilterButtons();
 }
 
