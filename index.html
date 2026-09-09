@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Verificador de Inventario</title>
 
+    <!-- Librería para leer archivos Excel directamente en el navegador -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
     <style>
         * {
             box-sizing: border-box;
@@ -28,6 +31,62 @@
             font-size: 28px;
         }
 
+        .top-actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 18px;
+            flex-wrap: wrap;
+        }
+
+        .file-label {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 46px;
+            padding: 0 18px;
+            background: #222;
+            color: white;
+            border-radius: 9px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+        .file-label:hover {
+            opacity: 0.9;
+        }
+
+        #excelFile {
+            display: none;
+        }
+
+        .file-name {
+            display: flex;
+            align-items: center;
+            min-height: 46px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .status {
+            background: white;
+            border-radius: 10px;
+            padding: 12px 15px;
+            margin-bottom: 18px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+            display: none;
+        }
+
+        .status.error {
+            color: #b71c1c;
+            display: block;
+        }
+
+        .status.success {
+            color: #16803c;
+            display: block;
+        }
+
         .search-box {
             width: 100%;
             padding: 15px 18px;
@@ -36,6 +95,7 @@
             border-radius: 10px;
             outline: none;
             margin-bottom: 20px;
+            background: white;
         }
 
         .search-box:focus {
@@ -54,11 +114,18 @@
             border-radius: 10px;
             padding: 12px 18px;
             box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+            min-width: 120px;
+        }
+
+        .summary-box span {
+            font-size: 13px;
+            color: #777;
         }
 
         .summary-box strong {
             display: block;
             font-size: 20px;
+            margin-top: 3px;
         }
 
         .product {
@@ -82,6 +149,7 @@
         .description {
             font-size: 16px;
             font-weight: 600;
+            line-height: 1.35;
         }
 
         .numbers {
@@ -163,9 +231,34 @@
             text-align: center;
             padding: 40px;
             color: #777;
+            background: white;
+            border-radius: 12px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 50px 20px;
+            color: #777;
+            background: white;
+            border-radius: 12px;
+        }
+
+        .empty-state strong {
+            display: block;
+            color: #333;
+            font-size: 18px;
+            margin-bottom: 8px;
         }
 
         @media (max-width: 700px) {
+            .container {
+                padding: 18px 12px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+
             .product {
                 grid-template-columns: 1fr;
             }
@@ -173,10 +266,15 @@
             .numbers {
                 justify-content: space-between;
                 width: 100%;
+                gap: 8px;
             }
 
             .description {
                 font-size: 15px;
+            }
+
+            .number {
+                min-width: 60px;
             }
         }
     </style>
@@ -187,6 +285,24 @@
 <div class="container">
 
     <h1>Inventario físico</h1>
+
+    <div class="top-actions">
+        <label class="file-label" for="excelFile">
+            Cargar Excel
+        </label>
+
+        <input
+            type="file"
+            id="excelFile"
+            accept=".xlsx,.xls"
+        >
+
+        <div class="file-name" id="fileName">
+            Ningún archivo cargado
+        </div>
+    </div>
+
+    <div id="status" class="status"></div>
 
     <input
         type="text"
@@ -206,99 +322,281 @@
             <span>Cuadrados</span>
             <strong id="completedProducts">0</strong>
         </div>
+
+        <div class="summary-box">
+            <span>Pendientes</span>
+            <strong id="pendingProducts">0</strong>
+        </div>
     </div>
 
-    <div id="productList"></div>
+    <div id="productList">
+        <div class="empty-state">
+            <strong>Carga tu archivo Excel</strong>
+            Selecciona el inventario para comenzar.
+        </div>
+    </div>
 
 </div>
 
 <script>
 
-const products = [
-    {
-        sku: "0667C001AC",
-        description: "BOTELLA DE TINTA CANON GI-190 NEGRA 135 ML",
-        system: 4,
-        physical: 0
-    },
-    {
-        sku: "0668C001AC",
-        description: "BOTELLA DE TINTA CANON GI-190C CYAN",
-        system: 6,
-        physical: 0
-    },
-    {
-        sku: "0669C001AC",
-        description: "BOTELLA DE TINTA CANON GI-190M MAGENTA",
-        system: 5,
-        physical: 0
-    },
-    {
-        sku: "0670C001AC",
-        description: "BOTELLA DE TINTA CANON GI-190Y AMARILLO",
-        system: 10,
-        physical: 0
-    }
-];
+let products = [];
 
 const productList = document.getElementById("productList");
 const search = document.getElementById("search");
+const excelFile = document.getElementById("excelFile");
+const fileName = document.getElementById("fileName");
+const status = document.getElementById("status");
+
+function isEmpty(value) {
+    return value === null ||
+           value === undefined ||
+           String(value).trim() === "";
+}
+
+function normalizeText(value) {
+    return String(value ?? "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+}
+
+function parseNumber(value) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+        return value;
+    }
+
+    if (isEmpty(value)) {
+        return 0;
+    }
+
+    const cleaned = String(value)
+        .replace(/,/g, "")
+        .trim();
+
+    const number = Number(cleaned);
+
+    return Number.isFinite(number) ? number : 0;
+}
+
+function showStatus(message, type) {
+    status.textContent = message;
+    status.className = "status " + type;
+}
+
+excelFile.addEventListener("change", handleExcel);
+
+function handleExcel(event) {
+
+    const file = event.target.files[0];
+
+    if (!file) return;
+
+    fileName.textContent = file.name;
+
+    const reader = new FileReader();
+
+    reader.onload = function(e) {
+
+        try {
+
+            const data = new Uint8Array(e.target.result);
+
+            const workbook = XLSX.read(data, {
+                type: "array"
+            });
+
+            if (!workbook.SheetNames.length) {
+                throw new Error("El archivo no contiene hojas.");
+            }
+
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+
+            const rows = XLSX.utils.sheet_to_json(sheet, {
+                defval: null
+            });
+
+            if (!rows.length) {
+                throw new Error("La hoja no contiene datos.");
+            }
+
+            const firstRow = rows[0];
+
+            const requiredColumns = [
+                "ItemCode",
+                "ItemName",
+                "Existencia"
+            ];
+
+            const missingColumns = requiredColumns.filter(
+                column => !(column in firstRow)
+            );
+
+            if (missingColumns.length) {
+                throw new Error(
+                    "No se encontraron las columnas necesarias: " +
+                    missingColumns.join(", ")
+                );
+            }
+
+            products = rows
+                .filter(row => {
+
+                    const sku = row.ItemCode;
+
+                    if (isEmpty(sku)) {
+                        return false;
+                    }
+
+                    /*
+                     * Un producto se considera SIN SERIE
+                     * cuando NomSerie y NoSerie están vacíos.
+                     */
+                    const hasNomSerie =
+                        !isEmpty(row.NomSerie);
+
+                    const hasNoSerie =
+                        !isEmpty(row.NoSerie);
+
+                    return !hasNomSerie && !hasNoSerie;
+                })
+                .map(row => ({
+                    sku: String(row.ItemCode).trim(),
+                    description: String(row.ItemName ?? "").trim(),
+                    system: parseNumber(row.Existencia),
+                    physical: 0
+                }));
+
+            if (!products.length) {
+                throw new Error(
+                    "No se encontraron productos sin serie en el archivo."
+                );
+            }
+
+            search.value = "";
+
+            showStatus(
+                "Excel cargado correctamente. " +
+                products.length +
+                " productos sin serie encontrados.",
+                "success"
+            );
+
+            renderProducts();
+
+        } catch (error) {
+
+            products = [];
+
+            renderProducts();
+
+            showStatus(
+                "No se pudo cargar el Excel: " +
+                error.message,
+                "error"
+            );
+        }
+    };
+
+    reader.onerror = function() {
+
+        showStatus(
+            "No se pudo leer el archivo.",
+            "error"
+        );
+    };
+
+    reader.readAsArrayBuffer(file);
+}
 
 function renderProducts() {
 
-    const text = search.value.toLowerCase().trim();
+    const text = normalizeText(search.value.trim());
 
     const filtered = products.filter(product =>
-        product.sku.toLowerCase().includes(text) ||
-        product.description.toLowerCase().includes(text)
+        normalizeText(product.sku).includes(text) ||
+        normalizeText(product.description).includes(text)
     );
 
     productList.innerHTML = "";
 
+    if (!products.length) {
+
+        productList.innerHTML = `
+            <div class="empty-state">
+                <strong>Carga tu archivo Excel</strong>
+                Selecciona el inventario para comenzar.
+            </div>
+        `;
+
+        updateSummary();
+
+        return;
+    }
+
     if (filtered.length === 0) {
+
         productList.innerHTML = `
             <div class="no-results">
                 No se encontraron productos.
             </div>
         `;
+
         updateSummary();
+
         return;
     }
 
     filtered.forEach(product => {
 
-        const difference = product.system - product.physical;
+        const difference =
+            product.system - product.physical;
 
         const differenceClass =
             difference === 0
                 ? "difference-ok"
                 : "difference-warning";
 
-        const div = document.createElement("div");
+        const div =
+            document.createElement("div");
 
         div.className = "product";
 
         div.innerHTML = `
             <div>
-                <div class="sku">${product.sku}</div>
-                <div class="description">${product.description}</div>
+                <div class="sku">
+                    ${escapeHtml(product.sku)}
+                </div>
+
+                <div class="description">
+                    ${escapeHtml(product.description)}
+                </div>
             </div>
 
             <div class="numbers">
 
                 <div class="number">
-                    <span class="number-label">Sistema</span>
-                    <span class="number-value">${product.system}</span>
+                    <span class="number-label">
+                        Sistema
+                    </span>
+
+                    <span class="number-value">
+                        ${product.system}
+                    </span>
                 </div>
 
                 <div class="number">
-                    <span class="number-label">Físico</span>
+
+                    <span class="number-label">
+                        Físico
+                    </span>
 
                     <div class="controls">
 
                         <button
                             class="minus"
-                            onclick="changePhysical('${product.sku}', -1)"
+                            onclick="changePhysical('${escapeAttribute(product.sku)}', -1)"
+                            aria-label="Disminuir"
                         >
                             −
                         </button>
@@ -308,12 +606,14 @@ function renderProducts() {
                             class="physical-input"
                             value="${product.physical}"
                             min="0"
-                            onchange="setPhysical('${product.sku}', this.value)"
+                            step="1"
+                            onchange="setPhysical('${escapeAttribute(product.sku)}', this.value)"
                         >
 
                         <button
                             class="plus"
-                            onclick="changePhysical('${product.sku}', 1)"
+                            onclick="changePhysical('${escapeAttribute(product.sku)}', 1)"
+                            aria-label="Aumentar"
                         >
                             +
                         </button>
@@ -322,11 +622,15 @@ function renderProducts() {
                 </div>
 
                 <div class="number">
-                    <span class="number-label">Diferencia</span>
+
+                    <span class="number-label">
+                        Diferencia
+                    </span>
 
                     <span class="number-value ${differenceClass}">
                         ${difference}
                     </span>
+
                 </div>
 
             </div>
@@ -338,9 +642,27 @@ function renderProducts() {
     updateSummary();
 }
 
+function escapeHtml(value) {
+
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+function escapeAttribute(value) {
+
+    return String(value)
+        .replace(/\\/g, "\\\\")
+        .replace(/'/g, "\\'");
+}
+
 function changePhysical(sku, amount) {
 
-    const product = products.find(p => p.sku === sku);
+    const product =
+        products.find(p => p.sku === sku);
 
     if (!product) return;
 
@@ -355,11 +677,13 @@ function changePhysical(sku, amount) {
 
 function setPhysical(sku, value) {
 
-    const product = products.find(p => p.sku === sku);
+    const product =
+        products.find(p => p.sku === sku);
 
     if (!product) return;
 
-    let quantity = parseInt(value, 10);
+    let quantity =
+        parseInt(value, 10);
 
     if (isNaN(quantity) || quantity < 0) {
         quantity = 0;
@@ -375,17 +699,21 @@ function updateSummary() {
     document.getElementById("totalProducts").textContent =
         products.length;
 
-    const completed = products.filter(product =>
-        product.system === product.physical
-    ).length;
+    const completed =
+        products.filter(product =>
+            product.system === product.physical
+        ).length;
 
     document.getElementById("completedProducts").textContent =
         completed;
+
+    document.getElementById("pendingProducts").textContent =
+        products.length - completed;
 }
 
 search.addEventListener("input", renderProducts);
 
-renderProducts();
+updateSummary();
 
 </script>
 
