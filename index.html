@@ -58,11 +58,12 @@
         }
 
         .brand-logo {
-            width: 420px;
+            width: clamp(240px, 34vw, 360px);
             max-width: 100%;
             height: auto;
             display: block;
             object-fit: contain;
+            flex: 0 1 auto;
         }
 
         .brand-info {
