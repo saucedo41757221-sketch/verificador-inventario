@@ -33,6 +33,7 @@
 
         .top-actions {
             display: flex;
+            align-items: center;
             gap: 10px;
             margin-bottom: 18px;
             flex-wrap: wrap;
@@ -62,13 +63,24 @@
 
         .action-button {
             border: 0;
+            height: 46px;
             min-height: 46px;
-            padding: 0 18px;
+            padding: 0 16px;
             border-radius: 9px;
             cursor: pointer;
             font-size: 14px;
             font-weight: 600;
             font-family: inherit;
+            white-space: nowrap;
+            flex: 0 0 auto;
+        }
+
+        #exportButton {
+            min-width: 128px;
+        }
+
+        #finalizeButton {
+            min-width: 150px;
         }
 
         .action-button:disabled {
@@ -102,6 +114,20 @@
             min-height: 46px;
             color: #666;
             font-size: 14px;
+            flex: 0 1 auto;
+            min-width: 0;
+        }
+
+        #fileName {
+            max-width: 220px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        #saveStatus {
+            max-width: 180px;
+            white-space: nowrap;
         }
 
         #saveStatus {
@@ -400,6 +426,23 @@
 
         .summary-extra {
             margin-top: 0;
+        }
+
+    
+        @media (max-width: 760px) {
+            .top-actions {
+                align-items: stretch;
+            }
+
+            #fileName,
+            #saveStatus {
+                min-height: 46px;
+            }
+
+            #exportButton,
+            #finalizeButton {
+                flex: 1 1 0;
+            }
         }
 
     </style>
