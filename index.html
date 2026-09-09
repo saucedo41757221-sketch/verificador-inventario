@@ -1,1 +1,365 @@
 
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verificador de Inventario</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f4f5f7;
+            color: #222;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: auto;
+            padding: 25px 18px;
+        }
+
+        h1 {
+            margin: 0 0 20px;
+            font-size: 28px;
+        }
+
+        .search-box {
+            width: 100%;
+            padding: 15px 18px;
+            font-size: 17px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            outline: none;
+            margin-bottom: 20px;
+        }
+
+        .search-box:focus {
+            border-color: #555;
+        }
+
+        .summary {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .summary-box {
+            background: white;
+            border-radius: 10px;
+            padding: 12px 18px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        }
+
+        .summary-box strong {
+            display: block;
+            font-size: 20px;
+        }
+
+        .product {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 10px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .sku {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .description {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .numbers {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .number {
+            text-align: center;
+            min-width: 70px;
+        }
+
+        .number-label {
+            display: block;
+            font-size: 12px;
+            color: #777;
+            margin-bottom: 4px;
+        }
+
+        .number-value {
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        button {
+            width: 42px;
+            height: 42px;
+            border: none;
+            border-radius: 8px;
+            font-size: 22px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .minus {
+            background: #e5e5e5;
+        }
+
+        .plus {
+            background: #222;
+            color: white;
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        .physical {
+            width: 45px;
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .difference-ok {
+            color: #16803c;
+        }
+
+        .difference-warning {
+            color: #c62828;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 40px;
+            color: #777;
+        }
+
+        @media (max-width: 700px) {
+            .product {
+                grid-template-columns: 1fr;
+            }
+
+            .numbers {
+                justify-content: space-between;
+                width: 100%;
+            }
+
+            .description {
+                font-size: 15px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <h1>Inventario físico</h1>
+
+    <input
+        type="text"
+        id="search"
+        class="search-box"
+        placeholder="Buscar por SKU o descripción..."
+        autocomplete="off"
+    >
+
+    <div class="summary">
+        <div class="summary-box">
+            <span>Productos</span>
+            <strong id="totalProducts">0</strong>
+        </div>
+
+        <div class="summary-box">
+            <span>Cuadrados</span>
+            <strong id="completedProducts">0</strong>
+        </div>
+    </div>
+
+    <div id="productList"></div>
+
+</div>
+
+<script>
+
+const products = [
+    {
+        sku: "0667C001AC",
+        description: "BOTELLA DE TINTA CANON GI-190 NEGRA 135 ML",
+        system: 4,
+        physical: 0
+    },
+    {
+        sku: "0668C001AC",
+        description: "BOTELLA DE TINTA CANON GI-190C CYAN",
+        system: 6,
+        physical: 0
+    },
+    {
+        sku: "0669C001AC",
+        description: "BOTELLA DE TINTA CANON GI-190M MAGENTA",
+        system: 5,
+        physical: 0
+    },
+    {
+        sku: "0670C001AC",
+        description: "BOTELLA DE TINTA CANON GI-190Y AMARILLO",
+        system: 10,
+        physical: 0
+    }
+];
+
+const productList = document.getElementById("productList");
+const search = document.getElementById("search");
+
+function renderProducts() {
+
+    const text = search.value.toLowerCase().trim();
+
+    const filtered = products.filter(product =>
+        product.sku.toLowerCase().includes(text) ||
+        product.description.toLowerCase().includes(text)
+    );
+
+    productList.innerHTML = "";
+
+    if (filtered.length === 0) {
+        productList.innerHTML = `
+            <div class="no-results">
+                No se encontraron productos.
+            </div>
+        `;
+        updateSummary();
+        return;
+    }
+
+    filtered.forEach(product => {
+
+        const difference = product.system - product.physical;
+
+        const differenceClass =
+            difference === 0
+                ? "difference-ok"
+                : "difference-warning";
+
+        const div = document.createElement("div");
+
+        div.className = "product";
+
+        div.innerHTML = `
+            <div>
+                <div class="sku">${product.sku}</div>
+                <div class="description">${product.description}</div>
+            </div>
+
+            <div class="numbers">
+
+                <div class="number">
+                    <span class="number-label">Sistema</span>
+                    <span class="number-value">${product.system}</span>
+                </div>
+
+                <div class="number">
+                    <span class="number-label">Físico</span>
+
+                    <div class="controls">
+
+                        <button
+                            class="minus"
+                            onclick="changePhysical('${product.sku}', -1)"
+                        >
+                            −
+                        </button>
+
+                        <span class="physical">
+                            ${product.physical}
+                        </span>
+
+                        <button
+                            class="plus"
+                            onclick="changePhysical('${product.sku}', 1)"
+                        >
+                            +
+                        </button>
+
+                    </div>
+                </div>
+
+                <div class="number">
+                    <span class="number-label">Diferencia</span>
+
+                    <span class="number-value ${differenceClass}">
+                        ${difference}
+                    </span>
+                </div>
+
+            </div>
+        `;
+
+        productList.appendChild(div);
+    });
+
+    updateSummary();
+}
+
+function changePhysical(sku, amount) {
+
+    const product = products.find(p => p.sku === sku);
+
+    if (!product) return;
+
+    product.physical += amount;
+
+    if (product.physical < 0) {
+        product.physical = 0;
+    }
+
+    renderProducts();
+}
+
+function updateSummary() {
+
+    document.getElementById("totalProducts").textContent =
+        products.length;
+
+    const completed = products.filter(product =>
+        product.system === product.physical
+    ).length;
+
+    document.getElementById("completedProducts").textContent =
+        completed;
+}
+
+search.addEventListener("input", renderProducts);
+
+renderProducts();
+
+</script>
+
+</body>
+</html>
