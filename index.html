@@ -116,10 +116,29 @@
 
         .summary-box {
             background: white;
+            border: 1px solid transparent;
             border-radius: 10px;
             padding: 12px 18px;
             box-shadow: 0 1px 4px rgba(0,0,0,0.08);
             min-width: 120px;
+            cursor: pointer;
+            text-align: left;
+            font-family: inherit;
+            color: #222;
+            transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+        }
+
+        .summary-box:hover {
+            border-color: #ccc;
+        }
+
+        .summary-box:active {
+            transform: scale(0.98);
+        }
+
+        .summary-box.active {
+            border-color: #222;
+            box-shadow: 0 2px 7px rgba(0,0,0,0.14);
         }
 
         .summary-box span {
@@ -322,20 +341,35 @@
     >
 
     <div class="summary">
-        <div class="summary-box">
+        <button
+            type="button"
+            class="summary-box active"
+            id="filterAll"
+            onclick="setFilter('all')"
+        >
             <span>Productos</span>
             <strong id="totalProducts">0</strong>
-        </div>
+        </button>
 
-        <div class="summary-box">
+        <button
+            type="button"
+            class="summary-box"
+            id="filterCompleted"
+            onclick="setFilter('completed')"
+        >
             <span>Cuadrados</span>
             <strong id="completedProducts">0</strong>
-        </div>
+        </button>
 
-        <div class="summary-box">
+        <button
+            type="button"
+            class="summary-box"
+            id="filterPending"
+            onclick="setFilter('pending')"
+        >
             <span>Pendientes</span>
             <strong id="pendingProducts">0</strong>
-        </div>
+        </button>
     </div>
 
     <div id="productList">
@@ -351,6 +385,7 @@
 
 let products = [];
 let currentInventoryKey = null;
+let currentFilter = "all";
 
 const STORAGE_PREFIX = "verificadorInventario_";
 
@@ -657,6 +692,8 @@ function handleExcel(event) {
             }
 
             search.value = "";
+            currentFilter = "all";
+            updateFilterButtons();
 
             renderProducts();
 
@@ -689,10 +726,22 @@ function renderProducts() {
 
     const text = normalizeText(search.value.trim());
 
-    const filtered = products.filter(product =>
-        normalizeText(product.sku).includes(text) ||
-        normalizeText(product.description).includes(text)
-    );
+    const filtered = products.filter(product => {
+
+        const matchesSearch =
+            normalizeText(product.sku).includes(text) ||
+            normalizeText(product.description).includes(text);
+
+        const difference =
+            product.system - product.physical;
+
+        const matchesFilter =
+            currentFilter === "all" ||
+            (currentFilter === "completed" && difference === 0) ||
+            (currentFilter === "pending" && difference !== 0);
+
+        return matchesSearch && matchesFilter;
+    });
 
     productList.innerHTML = "";
 
@@ -872,6 +921,33 @@ function setPhysical(sku, value) {
     renderProducts();
 }
 
+function setFilter(filter) {
+
+    currentFilter = filter;
+
+    updateFilterButtons();
+    renderProducts();
+}
+
+function updateFilterButtons() {
+
+    const buttons = {
+        all: document.getElementById("filterAll"),
+        completed: document.getElementById("filterCompleted"),
+        pending: document.getElementById("filterPending")
+    };
+
+    Object.values(buttons).forEach(button => {
+        if (button) {
+            button.classList.remove("active");
+        }
+    });
+
+    if (buttons[currentFilter]) {
+        buttons[currentFilter].classList.add("active");
+    }
+}
+
 function updateSummary() {
 
     document.getElementById("totalProducts").textContent =
@@ -887,6 +963,8 @@ function updateSummary() {
 
     document.getElementById("pendingProducts").textContent =
         products.length - completed;
+
+    updateFilterButtons();
 }
 
 search.addEventListener("input", renderProducts);
