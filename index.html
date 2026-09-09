@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -137,11 +136,19 @@
             transform: scale(0.95);
         }
 
-        .physical {
-            width: 45px;
+        .physical-input {
+            width: 55px;
+            height: 42px;
             text-align: center;
             font-size: 20px;
             font-weight: bold;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            outline: none;
+        }
+
+        .physical-input:focus {
+            border-color: #555;
         }
 
         .difference-ok {
@@ -296,9 +303,13 @@ function renderProducts() {
                             −
                         </button>
 
-                        <span class="physical">
-                            ${product.physical}
-                        </span>
+                        <input
+                            type="number"
+                            class="physical-input"
+                            value="${product.physical}"
+                            min="0"
+                            onchange="setPhysical('${product.sku}', this.value)"
+                        >
 
                         <button
                             class="plus"
@@ -338,6 +349,23 @@ function changePhysical(sku, amount) {
     if (product.physical < 0) {
         product.physical = 0;
     }
+
+    renderProducts();
+}
+
+function setPhysical(sku, value) {
+
+    const product = products.find(p => p.sku === sku);
+
+    if (!product) return;
+
+    let quantity = parseInt(value, 10);
+
+    if (isNaN(quantity) || quantity < 0) {
+        quantity = 0;
+    }
+
+    product.physical = quantity;
 
     renderProducts();
 }
