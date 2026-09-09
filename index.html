@@ -60,6 +60,42 @@
             display: none;
         }
 
+        .action-button {
+            border: 0;
+            min-height: 46px;
+            padding: 0 18px;
+            border-radius: 9px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            font-family: inherit;
+        }
+
+        .action-button:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
+        .secondary-action {
+            background: white;
+            color: #222;
+            border: 1px solid #d5d5d5;
+        }
+
+        .secondary-action:not(:disabled):hover {
+            background: #f3f3f3;
+        }
+
+        .finalize-action {
+            background: #16803c;
+            color: white;
+        }
+
+        .finalize-action:not(:disabled):hover {
+            opacity: 0.9;
+        }
+
+
         .file-name {
             display: flex;
             align-items: center;
@@ -393,6 +429,14 @@
         <div class="file-name" id="saveStatus">
             Sin cambios guardados
         </div>
+
+        <button type="button" class="action-button secondary-action" id="exportButton" onclick="exportInventory()" disabled>
+            Exportar Excel
+        </button>
+
+        <button type="button" class="action-button finalize-action" id="finalizeButton" onclick="finalizeInventory()" disabled>
+            Finalizar inventario
+        </button>
     </div>
 
     <div id="status" class="status"></div>
@@ -467,6 +511,8 @@ const excelFile = document.getElementById("excelFile");
 const fileName = document.getElementById("fileName");
 const status = document.getElementById("status");
 const saveStatus = document.getElementById("saveStatus");
+const exportButton = document.getElementById("exportButton");
+const finalizeButton = document.getElementById("finalizeButton");
 
 function isEmpty(value) {
     return value === null ||
@@ -497,6 +543,19 @@ function parseNumber(value) {
     const number = Number(cleaned);
 
     return Number.isFinite(number) ? number : 0;
+}
+
+function updateActionButtons() {
+
+    const enabled = products.length > 0;
+
+    if (exportButton) {
+        exportButton.disabled = !enabled;
+    }
+
+    if (finalizeButton) {
+        finalizeButton.disabled = !enabled;
+    }
 }
 
 function showStatus(message, type) {
@@ -772,12 +831,14 @@ function handleExcel(event) {
             search.value = "";
             currentFilter = "all";
             updateFilterButtons();
+            updateActionButtons();
 
             renderProducts();
 
         } catch (error) {
 
             products = [];
+            updateActionButtons();
 
             renderProducts();
 
@@ -798,6 +859,159 @@ function handleExcel(event) {
     };
 
     reader.readAsArrayBuffer(file);
+}
+
+function exportInventory() {
+
+    if (!products.length) {
+        showStatus("No hay un inventario cargado para exportar.", "error");
+        return;
+    }
+
+    const rows = products.map(product => {
+
+        const difference =
+            Number(product.system || 0) -
+            Number(product.physical || 0);
+
+        let estado = "Cuadrado";
+
+        if (product.physical === 0 && product.system > 0) {
+            estado = "Pendiente";
+        } else if (
+            product.physical > 0 &&
+            product.physical < product.system
+        ) {
+            estado = "Faltante";
+        } else if (product.physical > product.system) {
+            estado = "Sobrante";
+        }
+
+        return {
+            SKU: product.sku,
+            DESCRIPCION: product.description,
+            "CANTIDAD EN SISTEMA": product.system,
+            "CANTIDAD FISICA": product.physical,
+            DIFERENCIA: difference,
+            ESTADO: estado,
+            NOTAS: product.notes || ""
+        };
+    });
+
+    const summaryRows = [
+        ["Resumen del inventario"],
+        [],
+        ["Archivo", fileName.textContent],
+        ["Fecha de exportación", new Date().toLocaleString()],
+        [],
+        ["Productos", products.length],
+        ["Cuadrados", products.filter(p => p.physical === p.system).length],
+        ["Pendientes", products.filter(p => p.physical === 0 && p.system > 0).length],
+        ["Faltantes", products.filter(p => p.physical > 0 && p.physical < p.system).length],
+        ["Sobrantes", products.filter(p => p.physical > p.system).length],
+        [],
+        ["Unidades sistema", products.reduce((t, p) => t + Number(p.system || 0), 0)],
+        ["Unidades físicas", products.reduce((t, p) => t + Number(p.physical || 0), 0)],
+        ["Diferencia total", products.reduce((t, p) => t + Number(p.system || 0) - Number(p.physical || 0), 0)]
+    ];
+
+    const workbook = XLSX.utils.book_new();
+
+    const inventorySheet =
+        XLSX.utils.json_to_sheet(rows);
+
+    const summarySheet =
+        XLSX.utils.aoa_to_sheet(summaryRows);
+
+    XLSX.utils.book_append_sheet(
+        workbook,
+        inventorySheet,
+        "Inventario"
+    );
+
+    XLSX.utils.book_append_sheet(
+        workbook,
+        summarySheet,
+        "Resumen"
+    );
+
+    const baseName =
+        fileName.textContent
+            .replace(/\.(xlsx|xls)$/i, "")
+            .replace(/[\\/:*?"<>|]/g, "_");
+
+    const finalName =
+        (baseName || "inventario") +
+        "_RESULTADO.xlsx";
+
+    XLSX.writeFile(workbook, finalName);
+
+    showStatus(
+        "Excel exportado correctamente.",
+        "success"
+    );
+}
+
+function finalizeInventory() {
+
+    if (!products.length) return;
+
+    const pending =
+        products.filter(product =>
+            product.physical === 0 &&
+            product.system > 0
+        ).length;
+
+    const completed =
+        products.filter(product =>
+            product.physical === product.system
+        ).length;
+
+    const missing =
+        products.filter(product =>
+            product.physical > 0 &&
+            product.physical < product.system
+        ).length;
+
+    const surplus =
+        products.filter(product =>
+            product.physical > product.system
+        ).length;
+
+    let message =
+        "¿Deseas marcar este inventario como FINALIZADO?\n\n" +
+        "Productos: " + products.length + "\n" +
+        "Cuadrados: " + completed + "\n" +
+        "Pendientes: " + pending + "\n" +
+        "Faltantes: " + missing + "\n" +
+        "Sobrantes: " + surplus + "\n\n" +
+        "Esto no borra el autoguardado ni bloquea los cambios.";
+
+    if (pending > 0) {
+        message +=
+            "\n\nTodavía hay productos pendientes de conteo.";
+    }
+
+    if (!confirm(message)) {
+        return;
+    }
+
+    const finalizedAt =
+        new Date().toISOString();
+
+    localStorage.setItem(
+        currentInventoryKey + "_finalizado",
+        finalizedAt
+    );
+
+    saveInventory();
+
+    showStatus(
+        "Inventario finalizado el " +
+        new Date(finalizedAt).toLocaleString() +
+        ". Puedes exportar el resultado.",
+        "success"
+    );
 }
 
 function renderProducts() {
@@ -1124,6 +1338,7 @@ function updateSummary() {
 search.addEventListener("input", renderProducts);
 
 updateSummary();
+updateActionButtons();
 
 </script>
 
