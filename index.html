@@ -914,8 +914,8 @@ function exportInventory() {
     const rows = products.map(product => {
 
         const difference =
-            Number(product.system || 0) -
-            Number(product.physical || 0);
+            Number(product.physical || 0) -
+            Number(product.system || 0);
 
         let estado = "Cuadrado";
 
@@ -955,7 +955,7 @@ function exportInventory() {
         [],
         ["Unidades sistema", products.reduce((t, p) => t + Number(p.system || 0), 0)],
         ["Unidades físicas", products.reduce((t, p) => t + Number(p.physical || 0), 0)],
-        ["Diferencia total", products.reduce((t, p) => t + Number(p.system || 0) - Number(p.physical || 0), 0)]
+        ["Diferencia total", products.reduce((t, p) => t + Number(p.physical || 0) - Number(p.system || 0), 0)]
     ];
 
     const workbook = XLSX.utils.book_new();
@@ -1067,8 +1067,7 @@ function renderProducts() {
             normalizeText(product.sku).includes(text) ||
             normalizeText(product.description).includes(text);
 
-        const difference =
-            product.system - product.physical;
+        const difference = product.physical - product.system;
 
         const matchesFilter =
             currentFilter === "all" ||
@@ -1110,8 +1109,7 @@ function renderProducts() {
 
     filtered.forEach(product => {
 
-        const difference =
-            product.system - product.physical;
+        const difference = product.physical - product.system;
 
         const differenceClass =
             difference === 0
