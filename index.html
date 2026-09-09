@@ -334,6 +334,38 @@
                 min-width: 60px;
             }
         }
+    
+        .filter-box {
+            min-height: 72px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: flex-start;
+            gap: 4px;
+            padding: 10px 16px;
+        }
+
+        .filter-box span {
+            font-size: 14px;
+            line-height: 1.2;
+        }
+
+        .filter-box strong {
+            display: block;
+            font-size: 20px;
+            line-height: 1.1;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .summary {
+            margin-bottom: 12px;
+        }
+
+        .summary-extra {
+            margin-top: 0;
+        }
+
     </style>
 </head>
 
@@ -374,22 +406,22 @@
     >
 
     <div class="summary">
-        <button type="button" class="summary-box active" id="filterAll" onclick="setFilter('all')">
+        <button type="button" class="summary-box active filter-box" id="filterAll" onclick="setFilter('all')">
             <span>Todos</span>
             <strong id="totalProducts">0</strong>
         </button>
 
-        <button type="button" class="summary-box" id="filterPending" onclick="setFilter('pending')">
+        <button type="button" class="summary-box filter-box" id="filterPending" onclick="setFilter('pending')">
             <span>Pendientes</span>
             <strong id="pendingProducts">0</strong>
         </button>
 
-        <button type="button" class="summary-box" id="filterMissing" onclick="setFilter('missing')">
+        <button type="button" class="summary-box filter-box" id="filterMissing" onclick="setFilter('missing')">
             <span>Faltantes</span>
             <strong id="missingProducts">0</strong>
         </button>
 
-        <button type="button" class="summary-box" id="filterCompleted" onclick="setFilter('completed')">
+        <button type="button" class="summary-box filter-box" id="filterCompleted" onclick="setFilter('completed')">
             <span>Cuadrados</span>
             <strong id="completedProducts">0</strong>
         </button>
