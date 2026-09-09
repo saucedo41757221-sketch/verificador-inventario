@@ -146,11 +146,20 @@
             color: #777;
         }
 
-        .summary-box strong {
-            display: block;
-            font-size: 20px;
-            margin-top: 3px;
-        }
+        .summary-box strong { display: block; font-size: 20px; margin-top: 3px; }
+
+        .summary-extra { display:flex; gap:12px; margin-top:12px; flex-wrap:wrap; }
+
+        .notes-area { margin-top:14px; padding-top:12px; border-top:1px solid #eee; }
+        .notes-label { display:block; font-size:12px; color:#777; margin-bottom:6px; }
+        .notes-input { width:100%; min-height:42px; padding:10px 12px; border:1px solid #ccc; border-radius:8px; font-family:inherit; font-size:14px; resize:vertical; outline:none; }
+        .notes-input:focus { border-color:#555; }
+        .history-toggle { margin-top:8px; width:auto; height:auto; padding:6px 0; background:transparent; color:#555; font-size:13px; font-weight:600; }
+        .history { display:none; margin-top:8px; padding:10px 12px; background:#f7f7f7; border-radius:8px; font-size:12px; }
+        .history.visible { display:block; }
+        .history-item { padding:5px 0; border-bottom:1px solid #e5e5e5; }
+        .history-item:last-child { border-bottom:none; }
+        .history-time { color:#777; margin-right:7px; }
 
         .product {
             background: white;
@@ -372,6 +381,18 @@
         </button>
     </div>
 
+    <div class="summary-extra">
+        <button type="button" class="summary-box" id="filterMissing" onclick="setFilter('missing')">
+            <span>Faltantes</span><strong id="missingProducts">0</strong>
+        </button>
+        <button type="button" class="summary-box" id="filterSurplus" onclick="setFilter('surplus')">
+            <span>Sobrantes</span><strong id="surplusProducts">0</strong>
+        </button>
+        <div class="summary-box"><span>Unidades sistema</span><strong id="systemUnits">0</strong></div>
+        <div class="summary-box"><span>Unidades físicas</span><strong id="physicalUnits">0</strong></div>
+        <div class="summary-box"><span>Diferencia total</span><strong id="totalDifference">0</strong></div>
+    </div>
+
     <div id="productList">
         <div class="empty-state">
             <strong>Carga tu archivo Excel</strong>
@@ -496,7 +517,11 @@ function loadSavedInventory(key) {
             return false;
         }
 
-        products = data.products;
+        products = data.products.map(product => ({
+            ...product,
+            notes: typeof product.notes === "string" ? product.notes : "",
+            history: Array.isArray(product.history) ? product.history : []
+        }));
 
         if (data.fileName) {
             fileName.textContent = data.fileName;
@@ -650,7 +675,9 @@ function handleExcel(event) {
                     sku: String(row.ItemCode).trim(),
                     description: String(row.ItemName ?? "").trim(),
                     system: parseNumber(row.Existencia),
-                    physical: 0
+                    physical: 0,
+                    notes: "",
+                    history: []
                 }));
 
             if (!products.length) {
@@ -738,7 +765,9 @@ function renderProducts() {
         const matchesFilter =
             currentFilter === "all" ||
             (currentFilter === "completed" && difference === 0) ||
-            (currentFilter === "pending" && difference !== 0);
+            (currentFilter === "pending" && difference !== 0) ||
+            (currentFilter === "missing" && difference > 0) ||
+            (currentFilter === "surplus" && difference < 0);
 
         return matchesSearch && matchesFilter;
     });
@@ -859,6 +888,13 @@ function renderProducts() {
                 </div>
 
             </div>
+
+            <div class="notes-area">
+                <label class="notes-label">Notas</label>
+                <textarea class="notes-input" placeholder="Ej.: Exhibición, uso interno, prestado..." onchange="setNotes('${escapeAttribute(product.sku)}', this.value)">${escapeHtml(product.notes || "")}</textarea>
+                <button type="button" class="history-toggle" onclick="toggleHistory(this)">Historial (${Math.min(product.history.length, 5)})</button>
+                <div class="history">${renderHistory(product)}</div>
+            </div>
         `;
 
         productList.appendChild(div);
@@ -884,6 +920,39 @@ function escapeAttribute(value) {
         .replace(/'/g, "\\'");
 }
 
+function addHistory(product, action, oldValue, newValue) {
+    if (!Array.isArray(product.history)) product.history = [];
+    product.history.push({ time:new Date().toISOString(), action, oldValue:String(oldValue), newValue:String(newValue) });
+    if (product.history.length > 5) product.history = product.history.slice(-5);
+}
+
+function renderHistory(product) {
+    if (!product.history || !product.history.length) return '<div class="history-item">Sin modificaciones registradas.</div>';
+    return product.history.slice().reverse().map(item => {
+        const time = new Date(item.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+        return `<div class="history-item"><span class="history-time">${time}</span><strong>${escapeHtml(item.action)}</strong> ${escapeHtml(item.oldValue)} → ${escapeHtml(item.newValue)}</div>`;
+    }).join('');
+}
+
+function toggleHistory(button) {
+    const history = button.nextElementSibling;
+    if (!history) return;
+    history.classList.toggle('visible');
+    button.textContent = history.classList.contains('visible') ? 'Ocultar historial' : `Historial (${Math.min((products.find(p => p.sku === button.closest('.product').querySelector('.sku').textContent)?.history || []).length,5)})`;
+}
+
+function setNotes(sku, value) {
+    const product = products.find(p => p.sku === sku);
+    if (!product) return;
+    const oldValue = product.notes || '';
+    const newValue = String(value || '').trim();
+    if (oldValue === newValue) return;
+    product.notes = newValue;
+    addHistory(product, 'Nota', oldValue || '""', newValue || '""');
+    saveInventory();
+    renderProducts();
+}
+
 function changePhysical(sku, amount) {
 
     const product =
@@ -891,12 +960,10 @@ function changePhysical(sku, amount) {
 
     if (!product) return;
 
+    const oldValue = product.physical;
     product.physical += amount;
-
-    if (product.physical < 0) {
-        product.physical = 0;
-    }
-
+    if (product.physical < 0) product.physical = 0;
+    if (oldValue !== product.physical) addHistory(product, 'Físico', oldValue, product.physical);
     saveInventory();
     renderProducts();
 }
@@ -915,8 +982,9 @@ function setPhysical(sku, value) {
         quantity = 0;
     }
 
+    const oldValue = product.physical;
     product.physical = quantity;
-
+    if (oldValue !== product.physical) addHistory(product, 'Físico', oldValue, product.physical);
     saveInventory();
     renderProducts();
 }
@@ -934,7 +1002,9 @@ function updateFilterButtons() {
     const buttons = {
         all: document.getElementById("filterAll"),
         completed: document.getElementById("filterCompleted"),
-        pending: document.getElementById("filterPending")
+        pending: document.getElementById("filterPending"),
+        missing: document.getElementById("filterMissing"),
+        surplus: document.getElementById("filterSurplus")
     };
 
     Object.values(buttons).forEach(button => {
@@ -961,9 +1031,15 @@ function updateSummary() {
     document.getElementById("completedProducts").textContent =
         completed;
 
-    document.getElementById("pendingProducts").textContent =
-        products.length - completed;
-
+    const pending = products.length - completed;
+    document.getElementById("pendingProducts").textContent = pending;
+    document.getElementById("missingProducts").textContent = products.filter(p => p.system - p.physical > 0).length;
+    document.getElementById("surplusProducts").textContent = products.filter(p => p.system - p.physical < 0).length;
+    const systemUnits = products.reduce((t,p) => t + Number(p.system || 0), 0);
+    const physicalUnits = products.reduce((t,p) => t + Number(p.physical || 0), 0);
+    document.getElementById("systemUnits").textContent = systemUnits;
+    document.getElementById("physicalUnits").textContent = physicalUnits;
+    document.getElementById("totalDifference").textContent = systemUnits - physicalUnits;
     updateFilterButtons();
 }
 
