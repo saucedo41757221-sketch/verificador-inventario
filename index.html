@@ -619,12 +619,20 @@
         }
         .category-box {
             border-top:3px solid #00A3E2;
+            height:auto;
+            min-height:74px;
+            padding:12px 18px;
         }
         .category-box.active {
             border-color:#00A3E2;
             box-shadow:0 2px 8px rgba(0,163,226,0.16);
         }
-        .category-box strong { display:block; font-size:20px; margin-top:3px; }
+        .category-box strong {
+            display:block;
+            font-size:20px;
+            line-height:1.15;
+            margin-top:4px;
+        }
         @media (max-width:700px) {
             .category-summary { grid-template-columns:1fr; }
         }
@@ -1656,24 +1664,34 @@ function updateCategoryButtons() {
 
 function updateSummary() {
 
-    document.getElementById("totalProducts").textContent =
-        products.length;
+    const categoryProducts =
+        currentCategory === "all"
+            ? products
+            : products.filter(product =>
+                (product.category || classifyProduct(product.sku, product.description)) === currentCategory
+            );
+
+    // Los contadores de estado siempre corresponden a la categoría seleccionada.
+    const totalProducts = categoryProducts.length;
 
     const completed =
-        products.filter(product =>
+        categoryProducts.filter(product =>
             product.system === product.physical
         ).length;
 
     const pending =
-        products.filter(product =>
+        categoryProducts.filter(product =>
             product.physical === 0 && product.system > 0
         ).length;
 
     const missing =
-        products.filter(product =>
+        categoryProducts.filter(product =>
             product.physical > 0 &&
             product.physical < product.system
         ).length;
+
+    document.getElementById("totalProducts").textContent =
+        totalProducts;
 
     document.getElementById("completedProducts").textContent =
         completed;
@@ -1685,13 +1703,13 @@ function updateSummary() {
         missing;
 
     const systemUnits =
-        products.reduce(
+        categoryProducts.reduce(
             (total, product) => total + Number(product.system || 0),
             0
         );
 
     const physicalUnits =
-        products.reduce(
+        categoryProducts.reduce(
             (total, product) => total + Number(product.physical || 0),
             0
         );
@@ -1703,17 +1721,38 @@ function updateSummary() {
         physicalUnits;
 
     document.getElementById("totalDifference").textContent =
-        systemUnits - physicalUnits;
+        physicalUnits - systemUnits;
 
+    // Estos cuatro contadores superiores siempre muestran el total real
+    // de productos de cada categoría, independientemente de la selección.
     const categoryAll = products.length;
-    const categoryAccessories = products.filter(p => (p.category || classifyProduct(p.sku, p.description)) === "Accesorios").length;
-    const categorySupplies = products.filter(p => (p.category || classifyProduct(p.sku, p.description)) === "Suministros").length;
-    const categoryTechnical = products.filter(p => (p.category || classifyProduct(p.sku, p.description)) === "Servicio técnico").length;
 
-    document.getElementById("categoryAllCount").textContent = categoryAll;
-    document.getElementById("categoryAccessoriesCount").textContent = categoryAccessories;
-    document.getElementById("categorySuppliesCount").textContent = categorySupplies;
-    document.getElementById("categoryTechnicalCount").textContent = categoryTechnical;
+    const categoryAccessories =
+        products.filter(p =>
+            (p.category || classifyProduct(p.sku, p.description)) === "Accesorios"
+        ).length;
+
+    const categorySupplies =
+        products.filter(p =>
+            (p.category || classifyProduct(p.sku, p.description)) === "Suministros"
+        ).length;
+
+    const categoryTechnical =
+        products.filter(p =>
+            (p.category || classifyProduct(p.sku, p.description)) === "Servicio técnico"
+        ).length;
+
+    document.getElementById("categoryAllCount").textContent =
+        categoryAll;
+
+    document.getElementById("categoryAccessoriesCount").textContent =
+        categoryAccessories;
+
+    document.getElementById("categorySuppliesCount").textContent =
+        categorySupplies;
+
+    document.getElementById("categoryTechnicalCount").textContent =
+        categoryTechnical;
 
     updateFilterButtons();
     updateCategoryButtons();
